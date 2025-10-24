@@ -17,12 +17,15 @@ class Settings(BaseSettings):
     @field_validator('NOTION_API_TOKEN')
     @classmethod
     def validate_notion_api_key(cls, value: str) -> str:
-        if not value or value.strip()=="":
+        # Strip whitespace FIRST
+        value = value.strip()
+        
+        if not value:
             raise ValueError("NOTION API TOKEN cannot be empty!")
         
         if not value.startswith("ntn_"):
             raise ValueError("NOTION API TOKEN is Invalid!")
     
-        return value.strip()
+        return value
 
 settings = Settings()

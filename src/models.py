@@ -1,10 +1,11 @@
 from pydantic import BaseModel, field_validator, model_validator
+from typing import ClassVar
 import re
         
 
 class NotionPagesRequest(BaseModel):
     """Model for validating URL given by user"""
-    UUID_PATTERN = r"[a-f0-9]{8}-?[a-f0-9]{4}-?[a-f0-9]{4}-?[a-f0-9]{4}-?[a-f0-9]{12}"
+    UUID_PATTERN: ClassVar[str] = r"[a-fA-F0-9]{8}-?[a-fA-F0-9]{4}-?[a-fA-F0-9]{4}-?[a-fA-F0-9]{4}-?[a-fA-F0-9]{12}"
     
     url: str
     block_id: str | None = None #optional
@@ -34,7 +35,7 @@ class NotionPagesRequest(BaseModel):
         match = re.search(self.UUID_PATTERN, self.url)
         if match:
             block_id = match.group()
-            block_id = block_id.replace("-","") #normalise the url
+            block_id = block_id.replace("-","").lower()  # normalize: remove hyphens and lowercase
 
             self.block_id = block_id
         

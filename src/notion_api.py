@@ -112,4 +112,24 @@ class NotionClient:
                 f"Notion API error: {response.status_code} - {response.text}",
                 status_code=response.status_code
             )
+        
+    async def get_all_block_children(self, block_id: str) -> list: 
+        """Handle Paginated Responses"""
     
+        all_res = []
+        cursor = None
+
+        while True:
+            data = await self.get_block_children(
+                block_id=block_id,
+                start_cursor=cursor
+            )
+
+            all_res.extend(data['results']) #extend merges the list, while append will append it as a single list
+
+            if not data['has_more']:
+                break
+
+            cursor = data['next_cursor']
+        
+        return all_res

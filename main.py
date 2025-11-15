@@ -435,6 +435,64 @@ notion_page_id: "{page_id}"
         self.log(f"Replaced {len(url_mapping)} image URLs", "SUCCESS")
         return updated_markdown
     
+    def update_posts_index(self, output_dir: str, title: str, filename: str, page_id: str):
+        """
+        Update posts-index.json with new post metadata.
+        
+        Args:
+            output_dir: Output directory (content/posts/)
+            title: Post title
+            filename: Generated filename
+            page_id: Notion page ID
+        """
+        self.log("Updating posts index...", "STEP")
+        
+        # Path to posts-index.json in repo root
+        repo_root = Path(output_dir).parent.parent
+        index_file = repo_root / "posts-index.json"
+        
+        # Load existing index or create new
+        if index_file.exists():
+            with open(index_file, 'r', encoding='utf-8') as f:
+                data = json.load(f)
+        else:
+            data = {"posts": []}
+        
+        # Extract date from filename (YYYY-MM-DD-title.md)
+        date_match = re.match(r'(\d{4}-\d{2}-\d{2})', filename)
+        date_str = date_match.group(1) if date_match else datetime.now().strftime("%Y-%m-%d")
+        
+        # Create post entry
+        post_entry = {
+            "title": title,
+            "date": date_str,
+            "url": f"content/posts/{filename.replace('.md', '.html')}",
+            "excerpt": f"A post about {title}",  # TODO: Extract from content
+            "notion_page_id": page_id
+        }
+        
+        # Check if post already exists (update it)
+        existing_index = next(
+            (i for i, p in enumerate(data["posts"]) if p.get("notion_page_id") == page_id),
+            None
+        )
+        
+        if existing_index is not None:
+            data["posts"][existing_index] = post_entry
+            self.log(f"Updated existing post in index", "SUCCESS")
+        else:
+            data["posts"].append(post_entry)
+            self.log(f"Added new post to index", "SUCCESS")
+        
+        # Sort by date (newest first)
+        data["posts"].sort(key=lambda x: x["date"], reverse=True)
+        
+        # Save index
+        with open(index_file, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        
+        self.log(f"Posts index saved: {index_file}", "SUCCESS")
+    
     async def deploy(
         self,
         page_id: str,
@@ -491,7 +549,10 @@ notion_page_id: "{page_id}"
             # Step 8: Save file
             file_path = self.save_markdown(full_content, filename, output_dir)
             
-            # Step 9: Git operations
+            # Step 9: ✅ NEW - Update posts index
+            self.update_posts_index(output_dir, title, filename, page_id)
+            
+            # Step 10: Git operations
             if auto_commit:
                 repo_path = Path(output_dir).parent.parent
                 commit_message = f"Add: {title}"

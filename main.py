@@ -313,21 +313,20 @@ notion_page_id: "{page_id}"
         
         Args:
             url: Notion image URL (will expire)
-            output_dir: Directory to save images
+            output_dir: Directory to save images (content/posts/)
             
         Returns:
             Relative path to saved image for Markdown
             
         Example:
             url = "https://prod-files-secure.s3.us-west-2.amazonaws.com/..."
-            → saves to: ../hriteshMaikap.github.io/static/images/f68cb829.png
-            → returns: "/images/f68cb829.png"
+            → saves to: ../../static/images/f68cb829.png
+            → returns: "../../static/images/f68cb829.png" (relative to post)
         """
         self.log(f"Downloading image: {url[:60]}...", "STEP")
         
         try:
             # Extract filename from URL
-            # Notion URLs have format: .../uuid/filename.ext?params
             parsed = urlparse(url)
             path_parts = parsed.path.split('/')
             
@@ -343,7 +342,9 @@ notion_page_id: "{page_id}"
                 url_hash = hashlib.md5(url.encode()).hexdigest()[:8]
                 filename = f"{url_hash}_{original_filename}"
             
-            # Create images directory
+            # ✅ FIX: Create images directory relative to output_dir
+            # output_dir = ../hriteshMaikap.github.io/content/posts
+            # images_dir = ../hriteshMaikap.github.io/static/images
             images_dir = Path(output_dir).parent.parent / "static" / "images"
             images_dir.mkdir(parents=True, exist_ok=True)
             
@@ -356,8 +357,11 @@ notion_page_id: "{page_id}"
                 image_path = images_dir / filename
                 image_path.write_bytes(response.content)
             
-            # Return relative path for Hugo
-            relative_path = f"/images/{filename}"
+            # ✅ FIX: Return relative path from post location
+            # Post is at: content/posts/2025-11-15-post.md
+            # Image is at: static/images/image.png
+            # Relative path: ../../static/images/image.png
+            relative_path = f"../../static/images/{filename}"
             
             self.log(f"Saved image: {filename}", "SUCCESS")
             return relative_path

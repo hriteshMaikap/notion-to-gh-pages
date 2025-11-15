@@ -107,7 +107,7 @@ class MarkdownConverter:
             if rt.type == "text":
                 text = rt.plain_text
             elif rt.type == "equation":
-                # Inline equation: wrap in $...$
+                # ✅ FIX: Inline equation uses single $
                 text = f"${rt.equation.expression}$"
             else:
                 text = rt.plain_text
@@ -327,6 +327,8 @@ class MarkdownConverter:
         """
         Convert block-level equation.
         
+        ✅ FIX: Use $$ for display math (Kramdown/Jekyll compatible)
+        
         Format:
         $$
         expression
@@ -356,7 +358,7 @@ class MarkdownConverter:
         Format: ![caption](url)
         
         Note: Notion image URLs expire! 
-        TODO: Download images and use local paths
+        Images will be downloaded and URLs replaced by deployer.
         """
         content = block.image
         if not content:
@@ -375,10 +377,8 @@ class MarkdownConverter:
         if not url:
             return ""
         
-        # Warning comment about expiration
-        warning = "<!-- Note: Notion image URL expires -->\n"
-        
-        return f"{warning}![{caption}]({url})\n\n"
+        # ✅ No warning comment - deployer will handle image download
+        return f"![{caption}]({url})\n\n"
     
     def _convert_table_of_contents(self, block: NotionBlock) -> str:
         """
@@ -450,4 +450,3 @@ class MarkdownConverter:
 
 
 
-    

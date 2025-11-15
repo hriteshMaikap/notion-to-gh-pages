@@ -22,7 +22,7 @@ class TestURLValidation:
     
     def test_valid_url_without_hyphens(self):
         """Test URL with non-hyphenated UUID is valid."""
-        url = "https://www.notion.so/Central-Limit-Theorem-243d7db3854480bca2b6f823a7f0ad82"
+        url = "https://www.notion.so/Central-Limit-Theorem-<you-page-id>"
         request = NotionPagesRequest(url=url)
         
         assert request.url == url
@@ -30,7 +30,7 @@ class TestURLValidation:
     
     def test_valid_url_without_www(self):
         """Test URL without 'www' subdomain is valid."""
-        url = "https://notion.so/Page-243d7db3854480bca2b6f823a7f0ad82"
+        url = "https://notion.so/Page-<you-page-id>"
         request = NotionPagesRequest(url=url)
         
         assert request.url == url
@@ -50,7 +50,7 @@ class TestURLValidation:
     def test_invalid_domain_raises_error(self):
         """Test that non-Notion URL raises error."""
         with pytest.raises(ValidationError) as exc_info:
-            NotionPagesRequest(url="https://google.com/page-243d7db3854480bca2b6f823a7f0ad82")
+            NotionPagesRequest(url="https://google.com/page-<you-page-id>")
         
         assert "notion" in str(exc_info.value).lower()
     
@@ -76,15 +76,15 @@ class TestBlockIDExtraction:
         request = NotionPagesRequest(url=url)
         
         # Should extract and normalize (remove hyphens)
-        assert request.block_id == "243d7db3854480bca2b6f823a7f0ad82"
+        assert request.block_id == "<you-page-id>"
         assert "-" not in request.block_id
     
     def test_extracts_non_hyphenated_uuid(self):
         """Test extraction of UUID without hyphens."""
-        url = "https://www.notion.so/Page-243d7db3854480bca2b6f823a7f0ad82"
+        url = "https://www.notion.so/Page-<you-page-id>"
         request = NotionPagesRequest(url=url)
         
-        assert request.block_id == "243d7db3854480bca2b6f823a7f0ad82"
+        assert request.block_id == "<you-page-id>"
     
     def test_normalizes_uuid_removes_hyphens(self):
         """Test that hyphens are removed from block_id."""
@@ -97,7 +97,7 @@ class TestBlockIDExtraction:
     
     def test_block_id_is_lowercase(self):
         """Test that block_id is lowercase (UUIDs should be lowercase)."""
-        url = "https://www.notion.so/Page-243D7DB3854480BCA2B6F823A7F0AD82"
+        url = "https://www.notion.so/Page-<you-page-id>"
         request = NotionPagesRequest(url=url)
         
         assert request.block_id.islower()
@@ -108,15 +108,15 @@ class TestEdgeCases:
     
     def test_url_with_query_parameters(self):
         """Test URL with query parameters is handled."""
-        url = "https://www.notion.so/Page-243d7db3854480bca2b6f823a7f0ad82?v=123"
+        url = "https://www.notion.so/Page-<you-page-id>?v=123"
         request = NotionPagesRequest(url=url)
         
         # Should still extract UUID correctly
-        assert request.block_id == "243d7db3854480bca2b6f823a7f0ad82"
+        assert request.block_id == "<you-page-id>"
     
     def test_url_with_hash_fragment(self):
         """Test URL with hash fragment is handled."""
-        url = "https://www.notion.so/Page-243d7db3854480bca2b6f823a7f0ad82#section"
+        url = "https://www.notion.so/Page-<you-page-id>#section"
         request = NotionPagesRequest(url=url)
         
-        assert request.block_id == "243d7db3854480bca2b6f823a7f0ad82"
+        assert request.block_id == "<you-page-id>"

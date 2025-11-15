@@ -5,15 +5,14 @@ This CLI tool fetches Notion pages, converts them to Markdown,
 and deploys them to your Hugo site with proper frontmatter.
 
 Usage:
+    # Deploy by page name (from config)
+    python main.py deploy --page clt
+    
+    # Deploy by page ID
     python main.py deploy --page-id <notion-page-id>
     
-    python main.py deploy \
-        --page-id abc123 \
-        --output-dir ../hriteshMaikap.github.io/content/posts \
-        --download-images \
-        --auto-commit
-        
-    python main.py deploy --page-id abc123 --verbose
+    # With auto-commit
+    python main.py deploy --page clt --auto-commit
 """
 
 import click
@@ -35,6 +34,46 @@ import httpx
 from urllib.parse import urlparse
 import hashlib
 
+
+# ============================================
+# NEW: Config Manager
+# ============================================
+
+class ConfigManager:
+    """Manage deployment configuration from deploy-config.json."""
+    
+    def __init__(self, config_path: str = "deploy-config.json"):
+        self.config_path = Path(config_path)
+        self.config = self._load_config()
+    
+    def _load_config(self) -> dict:
+        """Load configuration from JSON file."""
+        if not self.config_path.exists():
+            return {"pages": {}, "settings": {}}
+        
+        try:
+            with open(self.config_path, 'r', encoding='utf-8') as f:
+                return json.load(f)
+        except json.JSONDecodeError:
+            click.echo(f"⚠️  Warning: Could not parse {self.config_path}")
+            return {"pages": {}, "settings": {}}
+    
+    def get_page_id(self, page_name: str) -> Optional[str]:
+        """Get page ID by name from config."""
+        return self.config.get("pages", {}).get(page_name)
+    
+    def get_setting(self, key: str, default=None):
+        """Get a setting value."""
+        return self.config.get("settings", {}).get(key, default)
+    
+    def list_pages(self) -> dict:
+        """List all configured pages."""
+        return self.config.get("pages", {})
+
+
+# ============================================
+# Deployer Class (existing + git auto-commit)
+# ============================================
 
 class Deployer:
     """Handle deployment of Notion pages to Hugo site."""
@@ -273,6 +312,7 @@ notion_page_id: "{page_id}"
         self.log(f"Saved: {file_path}", "SUCCESS")
         return file_path
     
+    # ✅ NEW: Enhanced git_commit_and_push
     def git_commit_and_push(self, repo_path: str, message: str):
         """
         Commit and push changes to Git repository.
@@ -281,26 +321,47 @@ notion_page_id: "{page_id}"
             repo_path: Path to Git repository
             message: Commit message
         """
-        self.log("Committing changes...", "STEP")
+        self.log("Git operations starting...", "STEP")
         
         try:
             # Change to repo directory
             original_dir = os.getcwd()
             os.chdir(repo_path)
             
-            # Git add
-            subprocess.run(['git', 'add', '.'], check=True)
+            # Check if there are changes to commit
+            status_result = subprocess.run(
+                ['git', 'status', '--porcelain'],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            
+            if not status_result.stdout.strip():
+                self.log("No changes to commit", "INFO")
+                os.chdir(original_dir)
+                return
+            
+            # Git add all changes
+            self.log("Adding files to git...", "STEP")
+            subprocess.run(['git', 'add', '.'], check=True, capture_output=True)
+            self.log("Files staged", "SUCCESS")
             
             # Git commit
-            subprocess.run(['git', 'commit', '-m', message], check=True)
+            self.log(f"Committing: {message}", "STEP")
+            subprocess.run(['git', 'commit', '-m', message], check=True, capture_output=True)
+            self.log("Changes committed", "SUCCESS")
             
             # Git push
-            subprocess.run(['git', 'push'], check=True)
-            
+            self.log("Pushing to remote...", "STEP")
+            subprocess.run(['git', 'push'], check=True, capture_output=True)
             self.log("Changes pushed to GitHub", "SUCCESS")
+            self.log("🚀 GitHub Pages will rebuild automatically", "SUCCESS")
             
         except subprocess.CalledProcessError as e:
             self.log(f"Git operation failed: {e}", "ERROR")
+            if e.stderr:
+                error_msg = e.stderr.decode() if isinstance(e.stderr, bytes) else str(e.stderr)
+                self.log(f"Details: {error_msg}", "ERROR")
             raise
         
         finally:
@@ -537,7 +598,7 @@ notion_page_id: "{page_id}"
             # Step 5: Convert to Markdown
             markdown = self.convert_to_markdown(parser)
             
-            # Step 6: Download images and update URLs ✅ NEW
+            # Step 6: Download images and update URLs
             if download_images:
                 url_mapping = await self.process_images(parser, output_dir)
                 markdown = self.replace_image_urls(markdown, url_mapping)
@@ -549,24 +610,27 @@ notion_page_id: "{page_id}"
             # Step 8: Save file
             file_path = self.save_markdown(full_content, filename, output_dir)
             
-            # Step 9: ✅ NEW - Update posts index
+            # Step 9: Update posts index
             self.update_posts_index(output_dir, title, filename, page_id)
             
-            # Step 10: Git operations
+            # ✅ Step 10: Git operations (NEW - always run if auto_commit is True)
             if auto_commit:
                 repo_path = Path(output_dir).parent.parent
-                commit_message = f"Add: {title}"
+                commit_message = f"deploy: {title}\n\nAuto-deployed from Notion"
                 self.git_commit_and_push(str(repo_path), commit_message)
             
             self.log("=" * 60, "INFO")
             self.log("DEPLOYMENT COMPLETE", "SUCCESS")
             self.log("=" * 60, "INFO")
             
+            if not auto_commit:
+                self.log("⚠️  Changes not committed. Use --auto-commit to push automatically", "WARNING")
+            
             return file_path
 
 
 # ============================================
-# CLI COMMANDS
+# CLI COMMANDS (MODIFIED)
 # ============================================
 
 @click.group()
@@ -575,73 +639,385 @@ def cli():
     pass
 
 
+# ✅ MODIFIED: Deploy command now supports --page flag
 @cli.command()
 @click.option(
+    '--page',
+    help='Page name from deploy-config.json (e.g., clt)'
+)
+@click.option(
     '--page-id',
-    required=True,
-    help='Notion page ID to deploy'
+    help='Notion page ID (overrides --page)'
 )
 @click.option(
     '--output-dir',
-    default='../hriteshMaikap.github.io/content/posts',
-    help='Output directory for Markdown file'
+    help='Output directory (overrides config)'
 )
 @click.option(
     '--download-images/--no-download-images',
-    default=True,
-    help='Download and save images locally'
+    default=None,
+    help='Download images locally (overrides config)'
 )
 @click.option(
     '--auto-commit/--no-auto-commit',
-    default=False,
-    help='Automatically commit and push changes'
+    default=None,
+    help='Auto-commit and push (overrides config)'
 )
 @click.option(
-    '--verbose',
-    is_flag=True,
-    help='Verbose output'
+    '--verbose/--no-verbose',
+    default=None,
+    help='Verbose output (overrides config)'
 )
 def deploy(
-    page_id: str,
-    output_dir: str,
-    download_images: bool,
-    auto_commit: bool,
-    verbose: bool
+    page: Optional[str],
+    page_id: Optional[str],
+    output_dir: Optional[str],
+    download_images: Optional[bool],
+    auto_commit: Optional[bool],
+    verbose: Optional[bool]
 ):
     """
-    Deploy a Notion page to Hugo site.
+    Deploy a Notion page to GitHub Pages.
     
-    Example:
-        python main.py deploy --page-id abc123 --verbose
+    Examples:
+    
+        # Deploy by page name (from config)
+        python main.py deploy --page clt
         
-        python main.py deploy --page-id abc123 --auto-commit
+        # Deploy with auto-commit
+        python main.py deploy --page clt --auto-commit
+        
+        # Deploy by page ID
+        python main.py deploy --page-id abc123 --verbose
     """
+    # Load config
+    config = ConfigManager()
+    
+    # ✅ Determine page ID (--page or --page-id)
+    if page_id:
+        final_page_id = page_id
+        click.echo(f"📄 Using page ID: {page_id}")
+    elif page:
+        final_page_id = config.get_page_id(page)
+        if not final_page_id:
+            click.echo(f"❌ Page '{page}' not found in deploy-config.json")
+            click.echo("\nAvailable pages:")
+            for name, pid in config.list_pages().items():
+                click.echo(f"  - {name}: {pid}")
+            raise click.Abort()
+        click.echo(f"📄 Deploying page: {page} ({final_page_id})")
+    else:
+        click.echo("❌ Either --page or --page-id is required")
+        raise click.Abort()
+    
+    # ✅ Get settings (CLI overrides config)
+    final_output_dir = output_dir or config.get_setting("output_dir", "../hriteshMaikap.github.io/content/posts")
+    final_download_images = download_images if download_images is not None else config.get_setting("download_images", True)
+    final_auto_commit = auto_commit if auto_commit is not None else config.get_setting("auto_commit", False)
+    final_verbose = verbose if verbose is not None else config.get_setting("verbose", False)
+    
     async def run_deployment():
         """Async wrapper for deployment."""
         try:
-            # Create deployer (settings loaded automatically)
-            deployer = Deployer(verbose=verbose)
+            deployer = Deployer(verbose=final_verbose)
             
-            # Deploy (async)
             file_path = await deployer.deploy(
-                page_id=page_id,
-                output_dir=output_dir,
-                download_images=download_images,
-                auto_commit=auto_commit
+                page_id=final_page_id,
+                output_dir=final_output_dir,
+                download_images=final_download_images,
+                auto_commit=final_auto_commit
             )
             
             click.echo(f"\n✅ Deployed to: {file_path}")
             
         except Exception as e:
             click.echo(f"\n❌ Deployment failed: {e}", err=True)
-            if verbose:
+            if final_verbose:
                 import traceback
                 traceback.print_exc()
             raise click.Abort()
     
-    # ✅ Run async function
     asyncio.run(run_deployment())
 
 
+# ✅ NEW: List configured pages
+@cli.command(name='list-pages')
+def list_pages():
+    """List all configured pages from deploy-config.json."""
+    config = ConfigManager()
+    pages = config.list_pages()
+    
+    if not pages:
+        click.echo("No pages configured yet.")
+        click.echo("\nAdd pages to deploy-config.json:")
+        click.echo('  "pages": { "clt": "page-id-here" }')
+        return
+    
+    click.echo("\n📚 Configured Pages:")
+    click.echo("=" * 60)
+    for name, page_id in pages.items():
+        click.echo(f"  {name:20} → {page_id}")
+    click.echo("=" * 60)
+    click.echo(f"\nTotal: {len(pages)} page(s)")
+    click.echo(f"\nDeploy with: python main.py deploy --page <name>")
+
+
+# ✅ NEW: Remove deployed page
+@cli.command(name='remove')
+@click.option(
+    '--page',
+    help='Page name from deploy-config.json (e.g., clt)'
+)
+@click.option(
+    '--page-id',
+    help='Notion page ID (overrides --page)'
+)
+@click.option(
+    '--auto-commit/--no-auto-commit',
+    default=None,
+    help='Auto-commit and push after removal (overrides config)'
+)
+@click.option(
+    '--verbose/--no-verbose',
+    default=None,
+    help='Verbose output (overrides config)'
+)
+def remove(
+    page: Optional[str],
+    page_id: Optional[str],
+    auto_commit: Optional[bool],
+    verbose: Optional[bool]
+):
+    """
+    Remove a deployed page from GitHub Pages.
+    
+    This will:
+    1. Find the markdown file by page ID
+    2. Delete the markdown file
+    3. Remove from posts-index.json
+    4. Delete associated images (if no other posts use them)
+    5. Optionally commit and push changes
+    
+    Examples:
+    
+        # Remove by page name
+        python main.py remove --page clt
+        
+        # Remove with auto-commit
+        python main.py remove --page clt --auto-commit
+        
+        # Remove by page ID
+        python main.py remove --page-id abc123 --verbose
+    """
+    # Load config
+    config = ConfigManager()
+    
+    # Determine page ID
+    if page_id:
+        final_page_id = page_id
+        click.echo(f"📄 Removing page ID: {page_id}")
+    elif page:
+        final_page_id = config.get_page_id(page)
+        if not final_page_id:
+            click.echo(f"❌ Page '{page}' not found in deploy-config.json")
+            click.echo("\nAvailable pages:")
+            for name, pid in config.list_pages().items():
+                click.echo(f"  - {name}: {pid}")
+            raise click.Abort()
+        click.echo(f"📄 Removing page: {page} ({final_page_id})")
+    else:
+        click.echo("❌ Either --page or --page-id is required")
+        raise click.Abort()
+    
+    # Get settings
+    output_dir = config.get_setting("output_dir", "../hriteshMaikap.github.io/content/posts")
+    final_auto_commit = auto_commit if auto_commit is not None else config.get_setting("auto_commit", False)
+    final_verbose = verbose if verbose is not None else config.get_setting("verbose", False)
+    
+    def log(message: str, level: str = "INFO"):
+        """Log message if verbose."""
+        if final_verbose:
+            icon = {
+                "INFO": "ℹ️",
+                "SUCCESS": "✅",
+                "ERROR": "❌",
+                "WARNING": "⚠️",
+                "STEP": "🔹"
+            }.get(level, "ℹ️")
+            click.echo(f"{icon} {message}")
+    
+    try:
+        log("=" * 60, "INFO")
+        log("STARTING REMOVAL", "INFO")
+        log("=" * 60, "INFO")
+        
+        repo_root = Path(output_dir).parent.parent
+        posts_dir = Path(output_dir)
+        index_file = repo_root / "posts-index.json"
+        
+        # Step 1: Find post in index
+        log("Searching posts index...", "STEP")
+        
+        if not index_file.exists():
+            click.echo("❌ posts-index.json not found")
+            raise click.Abort()
+        
+        with open(index_file, 'r', encoding='utf-8') as f:
+            data = json.load(f)
+        
+        # Find post by page_id
+        post_index = next(
+            (i for i, p in enumerate(data["posts"]) if p.get("notion_page_id") == final_page_id),
+            None
+        )
+        
+        if post_index is None:
+            click.echo(f"❌ No deployed post found with page_id: {final_page_id}")
+            click.echo("\nDeployed posts:")
+            for p in data["posts"]:
+                click.echo(f"  - {p['title']} ({p.get('notion_page_id', 'no ID')})")
+            raise click.Abort()
+        
+        post_data = data["posts"][post_index]
+        title = post_data["title"]
+        
+        log(f"Found post: {title}", "SUCCESS")
+        
+        # Step 2: Find and delete markdown file
+        log("Finding markdown file...", "STEP")
+        
+        # Search for file with matching page_id in frontmatter
+        md_file = None
+        for file in posts_dir.glob("*.md"):
+            content = file.read_text(encoding='utf-8')
+            if f'notion_page_id: "{final_page_id}"' in content:
+                md_file = file
+                break
+        
+        if md_file:
+            log(f"Deleting: {md_file.name}", "STEP")
+            
+            # Extract image URLs before deleting
+            content = md_file.read_text(encoding='utf-8')
+            image_pattern = r'!\[.*?\]\((.*?)\)'
+            images_in_post = re.findall(image_pattern, content)
+            
+            # Delete markdown file
+            md_file.unlink()
+            log(f"Deleted: {md_file.name}", "SUCCESS")
+        else:
+            log(f"Markdown file not found (will still remove from index)", "WARNING")
+            images_in_post = []
+        
+        # Step 3: Remove from posts index
+        log("Updating posts index...", "STEP")
+        
+        data["posts"].pop(post_index)
+        
+        with open(index_file, 'w', encoding='utf-8') as f:
+            json.dump(data, f, indent=2, ensure_ascii=False)
+        
+        log(f"Removed from posts index", "SUCCESS")
+        
+        # Step 4: Delete associated images (optional - only if not used elsewhere)
+        if images_in_post:
+            log("Checking for unused images...", "STEP")
+            
+            # Get all remaining markdown files
+            all_md_files = list(posts_dir.glob("*.md"))
+            
+            # Check which images are still in use
+            images_to_delete = []
+            for img_path in images_in_post:
+                if img_path.startswith("../../static/images/"):
+                    # Check if this image is used in any other post
+                    img_name = img_path.split("/")[-1]
+                    
+                    still_in_use = False
+                    for other_file in all_md_files:
+                        if other_file != md_file:
+                            other_content = other_file.read_text(encoding='utf-8')
+                            if img_name in other_content:
+                                still_in_use = True
+                                break
+                    
+                    if not still_in_use:
+                        images_to_delete.append(img_path)
+            
+            # Delete unused images
+            if images_to_delete:
+                images_dir = repo_root / "static" / "images"
+                for img_path in images_to_delete:
+                    img_name = img_path.split("/")[-1]
+                    img_file = images_dir / img_name
+                    
+                    if img_file.exists():
+                        img_file.unlink()
+                        log(f"Deleted image: {img_name}", "SUCCESS")
+                
+                log(f"Deleted {len(images_to_delete)} unused image(s)", "SUCCESS")
+            else:
+                log("No unused images to delete", "INFO")
+        
+        # Step 5: Git commit and push
+        if final_auto_commit:
+            log("Git operations starting...", "STEP")
+            
+            original_dir = os.getcwd()
+            os.chdir(str(repo_root))
+            
+            # Check for changes
+            status_result = subprocess.run(
+                ['git', 'status', '--porcelain'],
+                capture_output=True,
+                text=True,
+                check=True
+            )
+            
+            if status_result.stdout.strip():
+                # Git add
+                log("Adding files to git...", "STEP")
+                subprocess.run(['git', 'add', '.'], check=True, capture_output=True)
+                log("Files staged", "SUCCESS")
+                
+                # Git commit
+                commit_message = f"remove: {title}\n\nRemoved from Notion deployment"
+                log(f"Committing: {commit_message}", "STEP")
+                subprocess.run(['git', 'commit', '-m', commit_message], check=True, capture_output=True)
+                log("Changes committed", "SUCCESS")
+                
+                # Git push
+                log("Pushing to remote...", "STEP")
+                subprocess.run(['git', 'push'], check=True, capture_output=True)
+                log("Changes pushed to GitHub", "SUCCESS")
+                log("🚀 GitHub Pages will rebuild automatically", "SUCCESS")
+            else:
+                log("No changes to commit", "INFO")
+            
+            os.chdir(original_dir)
+        
+        log("=" * 60, "INFO")
+        log("REMOVAL COMPLETE", "SUCCESS")
+        log("=" * 60, "INFO")
+        
+        if not final_auto_commit:
+            log("⚠️  Changes not committed. Use --auto-commit to push automatically", "WARNING")
+        
+        click.echo(f"\n✅ Successfully removed: {title}")
+        
+    except subprocess.CalledProcessError as e:
+        click.echo(f"\n❌ Git operation failed: {e}", err=True)
+        if e.stderr:
+            error_msg = e.stderr.decode() if isinstance(e.stderr, bytes) else str(e.stderr)
+            click.echo(f"Details: {error_msg}", err=True)
+        raise click.Abort()
+    
+    except Exception as e:
+        click.echo(f"\n❌ Removal failed: {e}", err=True)
+        if final_verbose:
+            import traceback
+            traceback.print_exc()
+        raise click.Abort()
+    
 if __name__ == '__main__':
     cli()

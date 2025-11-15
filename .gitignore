@@ -2,3 +2,4 @@
 __pycache__
 .env
 src/content1.json
+deploy-config.json

@@ -133,7 +133,7 @@ python main.py remove --page my-article --auto-commit
 
 ## Takeaways
 
-This project showcases expertise in:
+This project showcases:
 
 - **API Integration**: Building robust clients for third-party APIs with error handling
 - **Async Programming**: Leveraging Python's asyncio for concurrent operations

@@ -1,14 +1,14 @@
 # Notion to GitHub Pages Automation Tool
 
-A powerful Python CLI tool that automates the conversion and deployment of Notion pages to GitHub Pages, streamlining content publishing workflows for developers and content creators.
+A Python CLI tool that automates the conversion and deployment of Notion pages to my GitHub Pages.
 
 ## Project Overview
 
-This project solves the challenge of manually exporting Notion content and deploying it to static sites. As a developer, I recognized the inefficiency in the traditional workflow: writing in Notion, exporting as Markdown, downloading images, and manually uploading to GitHub Pages. This tool automates the entire pipeline, from API fetching to git commits.
+This project solves the challenge of manually exporting Notion content, converting to a markdown (with an LLM maybe!) and deploying it to static sites. As a developer, I wanted to automate this workflow: writing in Notion, exporting as Markdown, downloading images, and manually uploading to GitHub Pages. This tool automates the entire pipeline, from API fetching, to git commits.
 
-### Key Features
-- **Async Notion API Integration**: Efficiently fetches page content using Notion's REST API with proper error handling
-- **Intelligent Block Conversion**: Converts Notion blocks (headings, lists, code, equations, images) to clean Markdown
+### What did I achieve?
+- **Async Notion API Integration**: Efficiently fetches page content using Notion's REST API with proper error handling (and pagination)
+- **Intelligent Block Conversion**: Converts Notion blocks with rich text and equations (headings, lists, code, equations, images) to clean Markdown
 - **Image Management**: Automatically downloads and relocates images with URL rewriting for static hosting
 - **Git Automation**: Optional auto-commit and push to GitHub Pages repositories
 - **CLI-Driven Workflow**: User-friendly command-line interface with configuration management
@@ -18,7 +18,7 @@ This project solves the challenge of manually exporting Notion content and deplo
 
 ### Thought Process as a Developer
 
-When approaching this problem, I focused on modularity and scalability:
+When approaching this problem, I focused on simplicity, modularity and somewhat scalability (not an expert here tho):
 
 1. **API Layer**: Started with a robust Notion client handling authentication, pagination, and error responses
 2. **Data Modeling**: Used Pydantic to create type-safe models for Notion's complex JSON structures
@@ -28,7 +28,7 @@ When approaching this problem, I focused on modularity and scalability:
 
 ### Core Components
 
-- **`NotionClient`**: Async HTTP client with comprehensive error handling for Notion API v1
+- **`NotionClient`**: Async HTTP client with error handling for Notion API v1
 - **`BlockParser`**: Filters and structures Notion blocks into processable content
 - **`MarkdownConverter`**: Handles rich text annotations, block types, and formatting
 - **`Deployer`**: Orchestrates the full deployment pipeline with logging and git integration
@@ -37,7 +37,7 @@ When approaching this problem, I focused on modularity and scalability:
 ## Technical Implementation
 
 ### Technologies Used
-- **Python 3.12**: Modern Python with type hints and async/await
+- **Python 3.12**: Python with type hints and async/await
 - **httpx**: Async HTTP client for API requests
 - **Pydantic**: Data validation and settings management
 - **Click**: Command-line interface framework

@@ -14,7 +14,7 @@ class TestURLValidation:
     
     def test_valid_url_with_hyphens(self):
         """Test URL with hyphenated UUID is valid."""
-        url = "https://www.notion.so/Page-Title-243d7db3-8544-80bc-a2b6-f823a7f0ad82"
+        url = "https://www.notion.so/Page-Title-<your-page-id>"
         request = NotionPagesRequest(url=url)
         
         assert request.url == url
@@ -72,7 +72,7 @@ class TestBlockIDExtraction:
     
     def test_extracts_hyphenated_uuid(self):
         """Test extraction of UUID with hyphens."""
-        url = "https://www.notion.so/Page-243d7db3-8544-80bc-a2b6-f823a7f0ad82"
+        url = "https://www.notion.so/Page-<you-page-id>"
         request = NotionPagesRequest(url=url)
         
         # Should extract and normalize (remove hyphens)
@@ -88,7 +88,7 @@ class TestBlockIDExtraction:
     
     def test_normalizes_uuid_removes_hyphens(self):
         """Test that hyphens are removed from block_id."""
-        url = "https://www.notion.so/Page-243d7db3-8544-80bc-a2b6-f823a7f0ad82"
+        url = "https://www.notion.so/Page-<you-page-id>"
         request = NotionPagesRequest(url=url)
         
         # Original UUID has hyphens, but block_id should not

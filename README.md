@@ -121,7 +121,7 @@ python main.py list-pages
 python main.py remove --page my-article --auto-commit
 ```
 
-## 🔄 Deployment Workflow
+## Deployment Workflow
 
 1. **Fetch**: Retrieves all blocks from the specified Notion page using pagination
 2. **Parse**: Filters processable blocks and extracts structured content
@@ -131,7 +131,7 @@ python main.py remove --page my-article --auto-commit
 6. **Index**: Updates `posts-index.json` for dynamic site generation
 7. **Commit**: Optionally commits and pushes changes to GitHub Pages
 
-## 🎯 Developer Skills Demonstrated
+## Takeaways
 
 This project showcases expertise in:
 
@@ -143,9 +143,9 @@ This project showcases expertise in:
 - **Type Safety**: Using modern Python typing and validation libraries
 - **Project Architecture**: Designing modular, maintainable software systems
 
-## 🔮 Future Enhancements
+## Future Enhancements
 
-- Webhook integration for automatic deployment on Notion updates
+- Webhook integration for automatic sync with Notion
 - Support for nested block structures and advanced Notion features
 - Batch processing for multiple pages
 - Integration with other static site generators
